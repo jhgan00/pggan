@@ -282,6 +282,39 @@ def compare(tfrecord_dir_a, tfrecord_dir_b, ignore_labels):
 
 #----------------------------------------------------------------------------
 
+def create_from_nii(tfrecord_dir, nii_dir, shuffle):
+    import SimpleITK as sitk
+    print('Loading images from "%s"' % nii_dir)
+    image_filenames = sorted(glob.glob(os.path.join(nii_dir, '*')))
+    if len(image_filenames) == 0:
+        error('No input images found')
+
+    sitk_t1 = sitk.ReadImage(image_filenames[0])
+    img = np.expand_dims(sitk.GetArrayFromImage(sitk_t1), axis=-1)
+
+    # img = np.asarray(PIL.Image.open(image_filenames[0]))
+    length = img.shape[0]
+    resolution = img.shape[1]
+    channels = img.shape[-1] if img.ndim == 3 else 1
+    if img.shape[2] != resolution:
+        error('Input images must have the same width and height')
+    if resolution != 2 ** int(np.floor(np.log2(resolution))):
+        error('Input image resolution must be a power-of-two')
+    if channels not in [1, 3]:
+        error('Input images must be stored as RGB or grayscale')
+
+    with TFRecordExporter(tfrecord_dir, len(image_filenames)) as tfr:
+        order = tfr.choose_shuffled_order() if shuffle else np.arange(len(image_filenames))
+        for idx in range(order.size):
+            img = np.asarray(PIL.Image.open(image_filenames[order[idx]]))
+            if channels == 1:
+                img = img[np.newaxis, :, :]  # HW => CHW
+            else:
+                img = img.transpose(2, 0, 1)  # HWC => CHW
+            tfr.add_image(img)
+
+#----------------------------------------------------------------------------
+
 def create_mnist(tfrecord_dir, mnist_dir):
     print('Loading MNIST from "%s"' % mnist_dir)
     import gzip
