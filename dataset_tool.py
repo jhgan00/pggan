@@ -295,23 +295,25 @@ def create_from_nii(tfrecord_dir, nii_dir, shuffle):
     # img = np.asarray(PIL.Image.open(image_filenames[0]))
     length = img.shape[0]
     resolution = img.shape[1]
-    channels = img.shape[-1] if img.ndim == 3 else 1
+    # channels = img.shape[-1] if img.ndim == 3 else 1
     if img.shape[2] != resolution:
         error('Input images must have the same width and height')
     if resolution != 2 ** int(np.floor(np.log2(resolution))):
         error('Input image resolution must be a power-of-two')
-    if channels not in [1, 3]:
-        error('Input images must be stored as RGB or grayscale')
+    # if channels not in [1, 3]:
+    #     error('Input images must be stored as RGB or grayscale')
 
     with TFRecordExporter(tfrecord_dir, len(image_filenames)) as tfr:
         order = tfr.choose_shuffled_order() if shuffle else np.arange(len(image_filenames))
         for idx in range(order.size):
-            img = np.asarray(PIL.Image.open(image_filenames[order[idx]]))
-            if channels == 1:
+            sitk_t1 = sitk.ReadImage(image_filenames[order[idx]])
+            imgs = sitk.GetArrayFromImage(sitk_t1)
+            for img in imgs:
+                # if channels == 1:
                 img = img[np.newaxis, :, :]  # HW => CHW
-            else:
-                img = img.transpose(2, 0, 1)  # HWC => CHW
-            tfr.add_image(img)
+                # else:
+                #     img = img.transpose(2, 0, 1)  # HWC => CHW
+                tfr.add_image(img)
 
 #----------------------------------------------------------------------------
 
@@ -698,6 +700,12 @@ def execute_cmdline(argv):
     p.add_argument(     'tfrecord_dir_a',   help='Directory containing first dataset')
     p.add_argument(     'tfrecord_dir_b',   help='Directory containing second dataset')
     p.add_argument(     '--ignore_labels',  help='Ignore labels (default: 0)', type=int, default=0)
+
+    p = add_command('create_from_nii', 'Create dataset from nii files.',
+                    'create_mnist datasets/mnist ~/downloads/mnist')
+    p.add_argument('tfrecord_dir', help='New dataset directory to be created')
+    p.add_argument('nii_dir', help='Directory containing nii files')
+    p.add_argument('--shuffle', help='Randomize image order (default: 1)', type=int, default=1)
 
     p = add_command(    'create_mnist',     'Create dataset for MNIST.',
                                             'create_mnist datasets/mnist ~/downloads/mnist')
