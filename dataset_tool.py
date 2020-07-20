@@ -293,7 +293,7 @@ def create_from_nii(tfrecord_dir, nii_dir, shuffle):
     img = np.expand_dims(sitk.GetArrayFromImage(sitk_t1), axis=-1)
 
     # img = np.asarray(PIL.Image.open(image_filenames[0]))
-    length = img.shape[0]
+    # length = img.shape[0]
     resolution = img.shape[1]
     # channels = img.shape[-1] if img.ndim == 3 else 1
     if img.shape[2] != resolution:
