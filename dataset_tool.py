@@ -15,7 +15,7 @@ import traceback
 import numpy as np
 import tensorflow as tf
 import PIL.Image
-
+sys.path.append("/opt/ml/code/")
 import tfutil
 import dataset
 
@@ -77,7 +77,8 @@ class TFRecordExporter:
             if lod:
                 img = img.astype(np.float32)
                 img = (img[:, 0::2, 0::2] + img[:, 0::2, 1::2] + img[:, 1::2, 0::2] + img[:, 1::2, 1::2]) * 0.25
-            quant = np.rint(img).clip(0, 255).astype(np.uint8)
+#             quant = np.rint(img).clip(0, 255).astype(np.uint8)
+            quant = img.astype(np.int16)
             ex = tf.train.Example(features=tf.train.Features(feature={
                 'shape': tf.train.Feature(int64_list=tf.train.Int64List(value=quant.shape)),
                 'data': tf.train.Feature(bytes_list=tf.train.BytesList(value=[quant.tostring()]))}))
@@ -291,28 +292,22 @@ def create_from_nii(tfrecord_dir, nii_dir, shuffle):
 
     sitk_t1 = sitk.ReadImage(image_filenames[0])
     img = np.expand_dims(sitk.GetArrayFromImage(sitk_t1), axis=-1)
-
-    # img = np.asarray(PIL.Image.open(image_filenames[0]))
-    # length = img.shape[0]
+    
     resolution = img.shape[1]
-    # channels = img.shape[-1] if img.ndim == 3 else 1
     if img.shape[2] != resolution:
         error('Input images must have the same width and height')
     if resolution != 2 ** int(np.floor(np.log2(resolution))):
         error('Input image resolution must be a power-of-two')
-    # if channels not in [1, 3]:
-    #     error('Input images must be stored as RGB or grayscale')
 
-    with TFRecordExporter(tfrecord_dir, len(image_filenames)) as tfr:
+    with TFRecordExporter(tfrecord_dir, len(image_filenames), False) as tfr:
         order = tfr.choose_shuffled_order() if shuffle else np.arange(len(image_filenames))
         for idx in range(order.size):
-            sitk_t1 = sitk.ReadImage(image_filenames[order[idx]])
+            fpath = image_filenames[order[idx]]
+            print(fpath)
+            sitk_t1 = sitk.ReadImage(fpath)
             imgs = sitk.GetArrayFromImage(sitk_t1)
             for img in imgs:
-                # if channels == 1:
-                img = img[np.newaxis, :, :]  # HW => CHW
-                # else:
-                #     img = img.transpose(2, 0, 1)  # HWC => CHW
+                img = img[np.newaxis, :, :]
                 tfr.add_image(img)
 
 #----------------------------------------------------------------------------
@@ -776,6 +771,6 @@ def execute_cmdline(argv):
 #----------------------------------------------------------------------------
 
 if __name__ == "__main__":
-    execute_cmdline(sys.argv)
+    create_from_nii("/opt/ml/processing/processed_data", "/opt/ml/processing/input_data", 0)
 
 #----------------------------------------------------------------------------
