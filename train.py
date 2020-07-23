@@ -197,10 +197,12 @@ def train_progressive_gan(
     grid_fakes = Gs.run(grid_latents, grid_labels, minibatch_size=sched.minibatch//config.num_gpus)
 
     print('Setting up result dir...')
-    result_subdir = misc.create_result_subdir(config.result_dir, config.desc)
-    misc.save_image_grid(grid_reals, os.path.join(result_subdir, 'reals.png'), drange=training_set.dynamic_range, grid_size=grid_size)
-    misc.save_image_grid(grid_fakes, os.path.join(result_subdir, 'fakes%06d.png' % 0), drange=drange_net, grid_size=grid_size)
-    summary_log = tf.summary.FileWriter(result_subdir)
+    output_subdir = misc.create_result_subdir(config.result_dir, "output")
+    model_subdir = misc.create_result_subdir(config.result_dir, "model")
+    
+    misc.save_image_grid(grid_reals, os.path.join(output_subdir, 'reals.png'), drange=training_set.dynamic_range, grid_size=grid_size)
+    misc.save_image_grid(grid_fakes, os.path.join(output_subdir, 'fakes%06d.png' % 0), drange=drange_net, grid_size=grid_size)
+    summary_log = tf.summary.FileWriter(model_subdir)
     if save_tf_graph:
         summary_log.add_graph(tf.get_default_graph())
     if save_weight_histograms:
@@ -259,17 +261,17 @@ def train_progressive_gan(
             # Save snapshots.
             if cur_tick % image_snapshot_ticks == 0 or done:
                 grid_fakes = Gs.run(grid_latents, grid_labels, minibatch_size=sched.minibatch//config.num_gpus)
-                misc.save_image_grid(grid_fakes, os.path.join(result_subdir, 'fakes%06d.png' % (cur_nimg // 1000)), drange=drange_net, grid_size=grid_size)
+                misc.save_image_grid(grid_fakes, os.path.join(output_subdir, 'fakes%06d.png' % (cur_nimg // 1000)), drange=drange_net, grid_size=grid_size)
             if cur_tick % network_snapshot_ticks == 0 or done:
-                misc.save_pkl((G, D, Gs), os.path.join(result_subdir, 'network-snapshot-%06d.pkl' % (cur_nimg // 1000)))
+                misc.save_pkl((G, D, Gs), os.path.join(model_subdir, 'network-snapshot-%06d.pkl' % (cur_nimg // 1000)))
 
             # Record start time of the next tick.
             tick_start_time = time.time()
 
     # Write final results.
-    misc.save_pkl((G, D, Gs), os.path.join(result_subdir, 'network-final.pkl'))
+    misc.save_pkl((G, D, Gs), os.path.join(model_subdir, 'network-final.pkl'))
     summary_log.close()
-    open(os.path.join(result_subdir, '_training-done.txt'), 'wt').close()
+    open(os.path.join(output_subdir, '_training-done.txt'), 'wt').close()
 
 #----------------------------------------------------------------------------
 # Main entry point.
