@@ -64,7 +64,9 @@ class TFRecordDataset:
         self._cur_lod           = -1
 
         # List tfrecords files and inspect their shapes.
+        print(self.tfreord_dir)
         assert os.path.isdir(self.tfrecord_dir)
+        print(os.listdir(self.tfreord_dir))
         tfr_files = sorted(glob.glob(os.path.join(self.tfrecord_dir, '*.tfrecords')))
         assert len(tfr_files) >= 1
         tfr_shapes = []

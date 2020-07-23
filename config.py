@@ -18,9 +18,8 @@ class EasyDict(dict):
 #----------------------------------------------------------------------------
 # Paths.
 
-data_dir = 'datasets'
-result_dir = 'results'
-
+data_dir = '/opt/ml/' # 'datasets'
+result_dir = '/opt/ml/'
 #----------------------------------------------------------------------------
 # TensorFlow options.
 
@@ -50,7 +49,7 @@ sched       = EasyDict()                                    # Options for train.
 grid        = EasyDict(size='1080p', layout='random')       # Options for train.setup_snapshot_image_grid().
 
 # Dataset (choose one).
-desc += '-LiTS';            dataset = EasyDict(tfrecord_dir='opt/ml/input/')
+desc += '-LiTS';            dataset = EasyDict(tfrecord_dir='input')
 # desc += '-celebahq';            dataset = EasyDict(tfrecord_dir='celebahq'); train.mirror_augment = True
 #desc += '-celeba';              dataset = EasyDict(tfrecord_dir='celeba'); train.mirror_augment = True
 #desc += '-cifar10';             dataset = EasyDict(tfrecord_dir='cifar10')
