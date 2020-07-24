@@ -9,11 +9,13 @@ import os
 import time
 import numpy as np
 import tensorflow as tf
-
 import config
 import tfutil
 import dataset
 import misc
+import warnings
+
+warnings.filterwarnings('ignore')
 
 #----------------------------------------------------------------------------
 # Choose the size and contents of the image snapshot grids that are exported
