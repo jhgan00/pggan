@@ -9,6 +9,8 @@ import os
 import glob
 import numpy as np
 import tensorflow as tf
+tf.python.deprecation._PRINT_DEPRECATION_WARNINGS = False
+
 import tfutil
 
 #----------------------------------------------------------------------------
@@ -18,7 +20,7 @@ def parse_tfrecord_tf(record):
     features = tf.parse_single_example(record, features={
         'shape': tf.FixedLenFeature([3], tf.int64),
         'data': tf.FixedLenFeature([], tf.string)})
-    data = tf.decode_raw(features['data'], tf.uint8)
+    data = tf.decode_raw(features['data'], tf.int16) # uint8 > int16
     return tf.reshape(data, features['shape'])
 
 def parse_tfrecord_np(record):
@@ -26,38 +28,7 @@ def parse_tfrecord_np(record):
     ex.ParseFromString(record)
     shape = ex.features.feature['shape'].int64_list.value
     data = ex.features.feature['data'].bytes_list.value[0]
-    return np.fromstring(data, np.uint8).reshape(shape)
-
-#----------------------------------------------------------------------------
-# Create dataset from input pipe channels
-
-from sagemaker_tensorflow import PipeModeDataset
-
-def input_fn(channel):
-    # Simple example data - a labeled vector.
-    features = {
-        'data': tf.FixedLenFeature([], tf.string),
-        'labels': tf.FixedLenFeature([], tf.int64),
-    }
-    
-    # A function to parse record bytes to a labeled vector record
-    def parse(record):
-        parsed = tf.parse_single_example(record, features)
-        return ({
-            'data': tf.decode_raw(parsed['data'], tf.float64)
-        }, parsed['labels'])
-
-    # Construct a PipeModeDataset reading from a 'training' channel, using
-    # the TF Record encoding.
-    ds = PipeModeDataset(channel=channel, record_format='TFRecord')
-
-    # The PipeModeDataset is a TensorFlow Dataset and provides standard Dataset methods
-    ds = ds.repeat(20)
-    ds = ds.prefetch(10)
-    ds = ds.map(parse, num_parallel_calls=10)
-    ds = ds.batch(64)
-    
-    return ds
+    return np.fromstring(data, np.int16).reshape(shape) # uint8 > int16
 
 #----------------------------------------------------------------------------
 # Dataset class that loads data from tfrecords files.
@@ -78,7 +49,7 @@ class TFRecordDataset:
         self.resolution         = None
         self.resolution_log2    = None
         self.shape              = []        # [channel, height, width]
-        self.dtype              = 'uint8'
+        self.dtype              = 'int16' # uint8 > int16
         self.dynamic_range      = [0, 255]
         self.label_file         = label_file
         self.label_size         = None      # [component]
@@ -96,17 +67,18 @@ class TFRecordDataset:
 
         # List tfrecords files and inspect their shapes.
         print(self.tfrecord_dir)
-        assert os.path.isdir(self.tfrecord_dir)
+#         assert os.path.isdir(self.tfrecord_dir)
         
-#         tfr_files = sorted(glob.glob(os.path.join(self.tfrecord_dir, '*.tfrecords')))
-#         assert len(tfr_files) >= 1
+        prefix = "s3://sagemaker-jhgan-workspace/LiTS-tfrecords/"
+        tfr_files = [prefix + f"processed_data-r0{i}.tfrecords" for i in range(2, 10)]
+        assert len(tfr_files) >= 1
         
-        tfr_shapes = tfr_shapes = [(1, 2**i, 2**i) for i in range(2,10)] # []
-#         for tfr_file in tfr_files:
-#             tfr_opt = tf.python_io.TFRecordOptions(tf.python_io.TFRecordCompressionType.NONE)
-#             for record in tf.python_io.tf_record_iterator(tfr_file, tfr_opt):
-#                 tfr_shapes.append(parse_tfrecord_np(record).shape)
-#                 break
+        tfr_shapes = []
+        for tfr_file in tfr_files:
+            tfr_opt = tf.python_io.TFRecordOptions(tf.python_io.TFRecordCompressionType.NONE)
+            for record in tf.python_io.tf_record_iterator(tfr_file, tfr_opt):
+                tfr_shapes.append(parse_tfrecord_np(record).shape)
+                break
 
         # Autodetect label filename.
         if self.label_file is None:
@@ -119,7 +91,7 @@ class TFRecordDataset:
                 self.label_file = guess
 
         # Determine shape and resolution.
-        max_shape = max(tfr_shapes, key=lambda shape: np.prod(shape)) # max(tfr_shapes, key=lambda shape: np.prod(shape))
+        max_shape = max(tfr_shapes, key=lambda shape: np.prod(shape))
         self.resolution = resolution if resolution is not None else max_shape[1]
         self.resolution_log2 = int(np.log2(self.resolution))
         self.shape = [max_shape[0], self.resolution, self.resolution]
@@ -149,12 +121,10 @@ class TFRecordDataset:
             self._tf_labels_dataset = tf.data.Dataset.from_tensor_slices(self._tf_labels_var)
 #----------------------------------------------------------------------------
 # Modified for Sagemaker Workflow: create dataset [from each files] -> [from each channels]
-            tfr_channels = ["r0" + str(i) for i in range(2,10)]
-            for tfr_channel, tfr_shape, tfr_lod in zip(tfr_channels, tfr_shapes, tfr_lods):
+            for tfr_file, tfr_shape, tfr_lod in zip(tfr_files, tfr_shapes, tfr_lods):
                 if tfr_lod < 0:
                     continue
-                dset = PipeModeDataset(channel=tfr_channel, record_format='TFRecord')
-#                 dset = tf.data.TFRecordDataset(tfr_file, compression_type='', buffer_size=buffer_mb<<20)
+                dset = tf.data.TFRecordDataset(tfr_file, compression_type='', buffer_size=buffer_mb<<20)
                 dset = dset.map(parse_tfrecord_tf, num_parallel_calls=num_threads)
                 dset = tf.data.Dataset.zip((dset, self._tf_labels_dataset))
                 bytes_per_item = np.prod(tfr_shape) * np.dtype(self.dtype).itemsize

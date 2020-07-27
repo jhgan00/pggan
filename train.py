@@ -7,15 +7,19 @@
 
 import os
 import time
+import warnings
 import numpy as np
 import tensorflow as tf
+
+tf.python.deprecation._PRINT_DEPRECATION_WARNINGS = False
+os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3' 
+warnings.filterwarnings('ignore')
+
+
 import config
 import tfutil
 import dataset
 import misc
-import warnings
-
-warnings.filterwarnings('ignore')
 
 #----------------------------------------------------------------------------
 # Choose the size and contents of the image snapshot grids that are exported
@@ -47,7 +51,7 @@ def setup_snapshot_image_grid(G, training_set,
             reals[idx] = real[0]
             labels[idx] = label[0]
             break
-
+            
     # Generate latents.
     latents = misc.random_latents(gw * gh, G)
     return (gw, gh), reals, labels, latents
@@ -199,11 +203,20 @@ def train_progressive_gan(
     grid_fakes = Gs.run(grid_latents, grid_labels, minibatch_size=sched.minibatch//config.num_gpus)
 
     print('Setting up result dir...')
-    output_subdir = misc.create_result_subdir(config.result_dir, "output")
-    model_subdir = misc.create_result_subdir(config.result_dir, "model")
     
-    misc.save_image_grid(grid_reals, os.path.join(output_subdir, 'reals.png'), drange=training_set.dynamic_range, grid_size=grid_size)
-    misc.save_image_grid(grid_fakes, os.path.join(output_subdir, 'fakes%06d.png' % 0), drange=drange_net, grid_size=grid_size)
+    # Seperate output & model subdir
+    model_subdir = misc.create_result_subdir(os.path.join(config.result_dir , "model"), config.desc)
+    output_subdir = os.environ["SM_OUTPUT_DATA_DIR"] # os.path.join(config.result_dir, "output")
+    
+    real_example = os.path.join(output_subdir, 'reals.png')
+    fake_example = os.path.join(output_subdir, 'fakes%06d.png' % 0)
+    
+    misc.save_image_grid(grid_reals, real_example, drange=training_set.dynamic_range, grid_size=grid_size)
+    misc.save_image_grid(grid_fakes, fake_example, drange=drange_net, grid_size=grid_size)
+    
+    assert os.path.isfile(real_example); print(real_example)
+    assert os.path.isfile(fake_example); print(fake_example)
+    
     summary_log = tf.summary.FileWriter(model_subdir)
     if save_tf_graph:
         summary_log.add_graph(tf.get_default_graph())
