@@ -13,8 +13,9 @@ import imp
 import numpy as np
 from collections import OrderedDict
 import tensorflow as tf
+
 from tensorflow.python.ops import nccl_ops
-tf.python.deprecation._PRINT_DEPRECATION_WARNINGS = False
+
 
 #----------------------------------------------------------------------------
 # Convenience.

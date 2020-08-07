@@ -11,10 +11,6 @@ import warnings
 import numpy as np
 import tensorflow as tf
 
-tf.python.deprecation._PRINT_DEPRECATION_WARNINGS = False
-os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3' 
-warnings.filterwarnings('ignore')
-
 
 import config
 import tfutil
@@ -94,8 +90,8 @@ class TrainingSchedule:
         cur_nimg,
         training_set,
         lod_initial_resolution  = 4,        # Image resolution used at the beginning.
-        lod_training_kimg       = 600,      # Thousands of real images to show before doubling the resolution.
-        lod_transition_kimg     = 600,      # Thousands of real images to show when fading in new layers.
+        lod_training_kimg       = 800,      # Thousands of real images to show before doubling the resolution.
+        lod_transition_kimg     = 800,      # Thousands of real images to show when fading in new layers.
         minibatch_base          = 16,       # Maximum minibatch size, divided evenly among GPUs.
         minibatch_dict          = {},       # Resolution-specific overrides.
         max_minibatch_per_gpu   = {},       # Resolution-specific maximum minibatch size per GPU.
@@ -148,14 +144,14 @@ def train_progressive_gan(
     network_snapshot_ticks  = 10,           # How often to export network snapshots?
     save_tf_graph           = False,        # Include full TensorFlow computation graph in the tfevents file?
     save_weight_histograms  = False,        # Include weight histograms in the tfevents file?
-    resume_run_id           = None,         # Run ID or network pkl to resume training from, None = start from scratch.
+    resume_run_id           = None, # Run ID or network pkl to resume training from, None = start from scratch.
     resume_snapshot         = None,         # Snapshot index to resume training from, None = autodetect.
     resume_kimg             = 0.0,          # Assumed training progress at the beginning. Affects reporting and training schedule.
     resume_time             = 0.0):         # Assumed wallclock time at the beginning. Affects reporting.
 
     maintenance_start_time = time.time()
     training_set = dataset.load_dataset(data_dir=config.data_dir, verbose=True, **config.dataset)
-
+    
     # Construct networks.
     with tf.device('/gpu:0'):
         if resume_run_id is not None:
@@ -225,6 +221,7 @@ def train_progressive_gan(
 
     print('Training...')
     cur_nimg = int(resume_kimg * 1000)
+    print(cur_nimg)
     cur_tick = 0
     tick_start_nimg = cur_nimg
     tick_start_time = time.time()
@@ -292,7 +289,7 @@ def train_progressive_gan(
 # Main entry point.
 # Calls the function indicated in config.py.
 
-if __name__ == "__main__":
+if __name__ == "__main__":    
     misc.init_output_logging()
     np.random.seed(config.random_seed)
     print('Initializing TensorFlow...')

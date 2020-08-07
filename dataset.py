@@ -9,7 +9,7 @@ import os
 import glob
 import numpy as np
 import tensorflow as tf
-tf.python.deprecation._PRINT_DEPRECATION_WARNINGS = False
+
 
 import tfutil
 
@@ -20,7 +20,7 @@ def parse_tfrecord_tf(record):
     features = tf.parse_single_example(record, features={
         'shape': tf.FixedLenFeature([3], tf.int64),
         'data': tf.FixedLenFeature([], tf.string)})
-    data = tf.decode_raw(features['data'], tf.int16) # uint8 > int16
+    data = tf.decode_raw(features['data'], tf.uint8) # from uint8 to int16
     return tf.reshape(data, features['shape'])
 
 def parse_tfrecord_np(record):
@@ -28,7 +28,7 @@ def parse_tfrecord_np(record):
     ex.ParseFromString(record)
     shape = ex.features.feature['shape'].int64_list.value
     data = ex.features.feature['data'].bytes_list.value[0]
-    return np.fromstring(data, np.int16).reshape(shape) # uint8 > int16
+    return np.fromstring(data, np.uint8).reshape(shape) # from uint8 to int16
 
 #----------------------------------------------------------------------------
 # Dataset class that loads data from tfrecords files.
@@ -49,8 +49,8 @@ class TFRecordDataset:
         self.resolution         = None
         self.resolution_log2    = None
         self.shape              = []        # [channel, height, width]
-        self.dtype              = 'int16' # uint8 > int16
-        self.dynamic_range      = [0, 255]
+        self.dtype              = 'uint8' # from uint8 to int16
+        self.dynamic_range      = [0, 150]
         self.label_file         = label_file
         self.label_size         = None      # [component]
         self.label_dtype        = None
@@ -68,8 +68,7 @@ class TFRecordDataset:
         # List tfrecords files and inspect their shapes.
         print(self.tfrecord_dir)
 #         assert os.path.isdir(self.tfrecord_dir)
-        
-        prefix = "s3://sagemaker-jhgan-workspace/LiTS-tfrecords/"
+        prefix = f"s3://sagemaker-jhgan-workspace/LiTS-window-liver-08/output/output-1/"
         tfr_files = [prefix + f"processed_data-r0{i}.tfrecords" for i in range(2, 10)]
         assert len(tfr_files) >= 1
         
@@ -119,8 +118,6 @@ class TFRecordDataset:
             self._tf_labels_var = tf.Variable(tf_labels_init, name='labels_var')
             tfutil.set_vars({self._tf_labels_var: self._np_labels})
             self._tf_labels_dataset = tf.data.Dataset.from_tensor_slices(self._tf_labels_var)
-#----------------------------------------------------------------------------
-# Modified for Sagemaker Workflow: create dataset [from each files] -> [from each channels]
             for tfr_file, tfr_shape, tfr_lod in zip(tfr_files, tfr_shapes, tfr_lods):
                 if tfr_lod < 0:
                     continue

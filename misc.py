@@ -66,7 +66,6 @@ def convert_to_pil_image(image, drange=[0,1]):
             image = image[0] # grayscale CHW => HW
         else:
             image = image.transpose(1, 2, 0) # CHW -> HWC
-
     image = adjust_dynamic_range(image, drange, [0,255])
     image = np.rint(image).clip(0, 255).astype(np.uint8)
     format = 'RGB' if image.ndim == 3 else 'L'
@@ -215,6 +214,11 @@ def list_network_pkls(run_id_or_result_subdir, include_final=True):
     return pkls
 
 def locate_network_pkl(run_id_or_result_subdir_or_network_pkl, snapshot=None):
+    isfile = os.path.isfile(run_id_or_result_subdir_or_network_pkl)
+    
+    print(isfile)
+    assert isfile, "Not A File"
+    
     if isinstance(run_id_or_result_subdir_or_network_pkl, str) and os.path.isfile(run_id_or_result_subdir_or_network_pkl):
         return run_id_or_result_subdir_or_network_pkl
 

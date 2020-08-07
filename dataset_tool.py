@@ -15,7 +15,8 @@ import traceback
 import numpy as np
 import tensorflow as tf
 import PIL.Image
-sys.path.append("/opt/ml/code/")
+
+sys.path.append("/opt/ml/processing/code")
 import tfutil
 import dataset
 
@@ -77,8 +78,7 @@ class TFRecordExporter:
             if lod:
                 img = img.astype(np.float32)
                 img = (img[:, 0::2, 0::2] + img[:, 0::2, 1::2] + img[:, 1::2, 0::2] + img[:, 1::2, 1::2]) * 0.25
-#             quant = np.rint(img).clip(0, 255).astype(np.uint8)
-            quant = img.astype(np.int16)
+            quant = np.rint(img).clip(0, 150).astype(np.uint8)
             ex = tf.train.Example(features=tf.train.Features(feature={
                 'shape': tf.train.Feature(int64_list=tf.train.Int64List(value=quant.shape)),
                 'data': tf.train.Feature(bytes_list=tf.train.BytesList(value=[quant.tostring()]))}))
@@ -285,17 +285,28 @@ def compare(tfrecord_dir_a, tfrecord_dir_b, ignore_labels):
 
 def create_from_nii(tfrecord_dir, nii_dir, shuffle):
     import SimpleITK as sitk
+    import pandas as pd
+    def window(img, WL=30, WW=150):
+        w = WW * 0.5
+        lower, upper = WL - w, WL + w
+        return img.clip(lower, upper) - lower
+
+    def getArrayFromNii(nii):
+        return sitk.GetArrayFromImage(sitk.ReadImage(nii))
+    
     print('Loading images from "%s"' % nii_dir)
     image_filenames = sorted(glob.glob(os.path.join(nii_dir, '*')))
+    levels = pd.read_csv("/opt/ml/processing/code/LiTS-Liver.csv").set_index("case")
+    
     if len(image_filenames) == 0:
         error('No input images found')
 
-    sitk_t1 = sitk.ReadImage(image_filenames[0])
-    img = np.expand_dims(sitk.GetArrayFromImage(sitk_t1), axis=-1)
-    
+    img = np.expand_dims(getArrayFromNii(image_filenames[0]), axis=-1)
     resolution = img.shape[1]
+    
     if img.shape[2] != resolution:
         error('Input images must have the same width and height')
+    
     if resolution != 2 ** int(np.floor(np.log2(resolution))):
         error('Input image resolution must be a power-of-two')
 
@@ -304,9 +315,15 @@ def create_from_nii(tfrecord_dir, nii_dir, shuffle):
         for idx in range(order.size):
             fpath = image_filenames[order[idx]]
             print(fpath)
-            sitk_t1 = sitk.ReadImage(fpath)
-            imgs = sitk.GetArrayFromImage(sitk_t1)
-            for img in imgs:
+            
+            fname = fpath.split("/")[-1]
+            level = levels.loc[fname].values.astype(int)
+            
+            if (level==0).all():
+                continue
+            imgs = getArrayFromNii(fpath)[level[0]:level[1]]
+            windowed_imgs = window(imgs)
+            for img in windowed_imgs:
                 img = img[np.newaxis, :, :]
                 tfr.add_image(img)
 
